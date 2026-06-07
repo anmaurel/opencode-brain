@@ -1,0 +1,22 @@
+node_modules/
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo
+.bun/
+bun-debug.log*
+
+# Local machine config. Keep opencode.example.json versioned.
+opencode.json
+*.local.*
+.env
+.env.*
+!.env.example
+
+# Dependency/install artifacts.
+package-lock.json
+
+# Runtime/cache artifacts.
+opencode-quota/*.log
+opencode-quota/*.cache

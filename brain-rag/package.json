@@ -1,0 +1,14 @@
+{
+  "name": "brain-rag-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "brain-rag-mcp": "./server.mjs"
+  },
+  "scripts": {
+    "start": "bun server.mjs"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

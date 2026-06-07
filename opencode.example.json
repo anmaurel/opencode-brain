@@ -1,0 +1,116 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openai/gpt-5.5",
+  "small_model": "zai-coding-plan/glm-5.1",
+  "instructions": [
+    "$OPENCODE_CONFIG_DIR/instructions.md"
+  ],
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "tail_turns": 3,
+    "preserve_recent_tokens": 6000,
+    "reserved": 10000
+  },
+  "tool_output": {
+    "max_lines": 120,
+    "max_bytes": 12000
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": "allow"
+  },
+  "mcp": {
+    "brain_fs": {
+      "type": "local",
+      "command": [
+        "sh",
+        "-lc",
+        "exec npx -y @modelcontextprotocol/server-filesystem \"$BRAIN_ROOT\""
+      ],
+      "enabled": true,
+      "timeout": 30000
+    },
+    "brain_rag": {
+      "type": "local",
+      "command": [
+        "sh",
+        "-lc",
+        "BRAIN_RAG_ROOT=\"$BRAIN_ROOT\" exec bun \"$OPENCODE_CONFIG_DIR/brain-rag/server.mjs\""
+      ],
+      "environment": {
+        "BRAIN_RAG_EMBED_URL": "$BRAIN_RAG_EMBED_URL",
+        "BRAIN_RAG_EMBED_MODEL": "$BRAIN_RAG_EMBED_MODEL",
+        "BRAIN_RAG_QDRANT_URL": "$BRAIN_RAG_QDRANT_URL",
+        "BRAIN_RAG_COLLECTION": "$BRAIN_RAG_COLLECTION",
+        "BRAIN_RAG_REINDEX_ON_STARTUP": "$BRAIN_RAG_REINDEX_ON_STARTUP",
+        "BRAIN_RAG_WATCH": "$BRAIN_RAG_WATCH",
+        "BRAIN_RAG_REINDEX_INTERVAL_MS": "$BRAIN_RAG_REINDEX_INTERVAL_MS",
+        "BRAIN_RAG_WATCH_DEBOUNCE_MS": "$BRAIN_RAG_WATCH_DEBOUNCE_MS"
+      },
+      "enabled": true,
+      "timeout": 60000
+    }
+  },
+  "tools": {
+    "brain_fs*": true,
+    "brain_rag*": true
+  },
+  "agent": {
+    "build": {
+      "model": "openai/gpt-5.5",
+      "prompt": "{file:$OPENCODE_CONFIG_DIR/prompts/build.md}",
+      "permission": {
+        "edit": "allow",
+        "bash": "allow",
+        "task": {
+          "*": "deny",
+          "general": "allow",
+          "explore": "allow",
+          "debug": "allow",
+          "code-reviewer": "allow",
+          "docs-writer": "allow",
+          "security-auditor": "allow",
+          "tests-writer": "allow",
+          "tdd": "allow"
+        }
+      }
+    },
+    "plan": {
+      "model": "openai/gpt-5.5",
+      "prompt": "{file:$OPENCODE_CONFIG_DIR/prompts/plan.md}",
+      "permission": {
+        "edit": "deny",
+        "bash": "ask",
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "scout": "allow",
+          "debug": "allow",
+          "code-reviewer": "allow",
+          "web-researcher": "allow"
+        }
+      }
+    },
+    "code-reviewer": {
+      "model": "openai/gpt-5.5"
+    },
+    "debug": {
+      "model": "openai/gpt-5.5"
+    },
+    "security-auditor": {
+      "model": "openai/gpt-5.5"
+    },
+    "web-researcher": {
+      "tools": {
+        "webfetch": true
+      }
+    },
+    "tdd": {
+      "model": "openai/gpt-5.5"
+    }
+  },
+  "plugin": [
+    "@slkiser/opencode-quota"
+  ]
+}

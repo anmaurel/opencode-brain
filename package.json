@@ -1,0 +1,19 @@
+{
+  "name": "opencode-config-brain-rag",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "1.15.13"
+  },
+  "scripts": {
+    "bootstrap": "bun install && bun run bootstrap-env && bun run render-config && bun run bootstrap-brain && docker compose -f brain-rag/docker-compose.yml up -d && bun run doctor",
+    "bootstrap-brain": "bun scripts/bootstrap-brain.mjs",
+    "bootstrap-env": "bun scripts/bootstrap-env.mjs",
+    "doctor": "bun scripts/doctor.mjs",
+    "public-safety-check": "bun scripts/public-safety-check.mjs",
+    "render-config": "bun scripts/render-opencode-config.mjs"
+  }
+}
