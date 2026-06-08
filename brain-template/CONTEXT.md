@@ -10,16 +10,17 @@ Store durable, non-secret context across sessions.
 
 - `AGENTS.md` — agent operating rules.
 - `Daily/` — dated session logs.
-- `Repos/` — repo-specific memory.
 - `Prompts/` — durable prompts/specs.
 - `RAG/` — local RAG setup notes.
 
-## Active Repos
+Project-specific context lives in each project's version-controlled `docs/wiki/` directory.
 
-Add active repos here when explicitly requested:
+## Active Projects
+
+Add active projects here when explicitly requested:
 
 ```md
-- `<repo>` — local path: `<path>`
+- `<project-name>` — wiki: `<project-path>/docs/wiki/`
 ```
 
 ## RAG Stack

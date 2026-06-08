@@ -77,7 +77,7 @@ try {
     ? await httpJson(embedUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: process.env.BRAIN_RAG_EMBED_MODEL || "text-embedding-bge-m3", input: "doctor check" }),
+        body: JSON.stringify({ model: process.env.BRAIN_RAG_EMBED_MODEL || "text-embedding-baai-bge-m3-568m", input: "doctor check" }),
         timeoutMs: 8000
       })
     : await httpJson(modelsUrl);

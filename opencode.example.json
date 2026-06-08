@@ -20,6 +20,14 @@
     "edit": "allow",
     "bash": "allow"
   },
+  "provider": {
+    "anthropic": {
+      "options": {
+        "baseURL": "$OPENCODE_ANTHROPIC_BASE_URL",
+        "apiKey": "$OPENCODE_ANTHROPIC_API_KEY"
+      }
+    }
+  },
   "mcp": {
     "brain_fs": {
       "type": "local",
@@ -43,6 +51,15 @@
         "BRAIN_RAG_EMBED_MODEL": "$BRAIN_RAG_EMBED_MODEL",
         "BRAIN_RAG_QDRANT_URL": "$BRAIN_RAG_QDRANT_URL",
         "BRAIN_RAG_COLLECTION": "$BRAIN_RAG_COLLECTION",
+        "BRAIN_RAG_CHUNK_WORDS": "$BRAIN_RAG_CHUNK_WORDS",
+        "BRAIN_RAG_CHUNK_OVERLAP": "$BRAIN_RAG_CHUNK_OVERLAP",
+        "BRAIN_RAG_SEARCH_LIMIT": "$BRAIN_RAG_SEARCH_LIMIT",
+        "BRAIN_RAG_CONTEXT_LIMIT": "$BRAIN_RAG_CONTEXT_LIMIT",
+        "BRAIN_RAG_RESULT_LIMIT_CAP": "$BRAIN_RAG_RESULT_LIMIT_CAP",
+        "BRAIN_RAG_SEARCH_MAX_CHARS": "$BRAIN_RAG_SEARCH_MAX_CHARS",
+        "BRAIN_RAG_CONTEXT_MAX_CHARS": "$BRAIN_RAG_CONTEXT_MAX_CHARS",
+        "BRAIN_RAG_RESULT_MAX_CHARS_CAP": "$BRAIN_RAG_RESULT_MAX_CHARS_CAP",
+        "BRAIN_RAG_ALLOWED_PATHS": "$BRAIN_RAG_ALLOWED_PATHS",
         "BRAIN_RAG_REINDEX_ON_STARTUP": "$BRAIN_RAG_REINDEX_ON_STARTUP",
         "BRAIN_RAG_WATCH": "$BRAIN_RAG_WATCH",
         "BRAIN_RAG_REINDEX_INTERVAL_MS": "$BRAIN_RAG_REINDEX_INTERVAL_MS",
@@ -121,6 +138,7 @@
     }
   },
   "plugin": [
-    "@slkiser/opencode-quota"
+    "@slkiser/opencode-quota",
+    "$OPENCODE_EXTRA_PLUGIN"
   ]
 }

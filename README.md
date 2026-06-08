@@ -13,7 +13,7 @@ Portable OpenCode configuration with local Brain RAG/MCP support for macOS.
 
 ## Included skills
 
-- `brain-memory` — maintain repo memory, durable prompts, Brain logs/TODOs, and RAG usage.
+- `brain-memory` — maintain project wiki memory, durable prompts, follow-ups, and RAG usage.
 - `fresh-laptop-setup` — install and validate this config on a new macOS laptop.
 - `public-repo-safety` — audit before publishing a public repo.
 - `customize-opencode` — edit OpenCode config, agents, skills, plugins, MCP, and permissions.
@@ -87,6 +87,34 @@ Manual fallback if rendering fails:
 cp opencode.example.json opencode.json
 # edit opencode.json paths manually for your machine
 ```
+
+## Config modes
+
+Three env presets are versioned alongside `.env.example` to switch between provider/model setups:
+
+| File | Purpose |
+|------|---------|
+| `.env.work` | Anthropic via local proxy, with `opencode-with-claude` plugin |
+| `.env.perso-high` | High-tier models (direct API) |
+| `.env.perso-low` | Budget-tier models (direct API) |
+
+Switch with:
+
+```bash
+bun run switch <work|perso-high|perso-low>
+```
+
+This copies `.env.<mode>` → `.env` and runs `render-config` automatically. Restart OpenCode to apply.
+
+To create a custom mode, copy an existing preset and adjust values:
+
+```bash
+cp .env.work .env.my-mode
+# edit .env.my-mode, then:
+bun run switch my-mode
+```
+
+Custom `.env.*` files are ignored by git (only `.env.work`, `.env.perso-high`, `.env.perso-low` are versioned).
 
 ## Fresh Brain bootstrap
 

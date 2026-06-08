@@ -15,6 +15,7 @@
     "bootstrap-env": "bun scripts/bootstrap-env.mjs",
     "doctor": "bun scripts/doctor.mjs",
     "public-safety-check": "bun scripts/public-safety-check.mjs",
-    "render-config": "bun scripts/render-opencode-config.mjs"
+    "render-config": "bun scripts/render-opencode-config.mjs",
+    "switch": "bun scripts/switch-mode.mjs"
   }
 }

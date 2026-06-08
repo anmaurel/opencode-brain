@@ -18,8 +18,9 @@ This template contains generic operating rules and RAG notes only. It must not c
 - `CONTEXT.md` — fresh vault overview.
 - `Daily/` — dated session logs.
 - `Prompts/` — durable prompts/specs.
-- `Repos/` — repo-specific memory.
 - `RAG/` — local RAG setup notes and TODOs.
+
+Project-specific context lives in each project's version-controlled `docs/wiki/` directory, not in the Brain vault. Older vaults may still contain a legacy `Repos/` folder; new bootstraps do not create it.
 
 ## After bootstrap
 

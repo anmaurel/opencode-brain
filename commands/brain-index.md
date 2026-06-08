@@ -12,7 +12,7 @@ $ARGUMENTS
 
 Behavior:
 
-- First call `brain_status` and report whether LM Studio, Qdrant, and the watcher are OK.
+- Before reindex/ingest, call `brain_status({ deep: true })`; use lightweight `brain_status` only for read-only status checks.
 - If `$ARGUMENTS` is empty, reindex the Brain vault with `brain_reindex`.
 - If `$ARGUMENTS` is a URL, ingest it with `brain_ingest_url`. Use the URL as title unless a title is clearly provided.
 - If `$ARGUMENTS` is a file or directory path, ingest it with `brain_ingest_path`.

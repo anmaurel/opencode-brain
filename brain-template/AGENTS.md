@@ -8,54 +8,47 @@ Use `$BRAIN_ROOT` if configured.
 
 ## Purpose
 
-The Brain stores durable, non-secret context for agents:
+The Brain stores durable, non-secret global context for agents:
 
-- repo/project summaries
-- architecture notes
-- commands
-- decisions
-- TODO/follow-ups
 - durable prompts/specs
 - session logs
 - RAG operating notes
 
+Project-specific context (architecture, features, APIs, decisions, commands, TODOs) lives in each project's `docs/wiki/` directory, not in the Brain vault.
+
 ## Session Start
 
 - Read `CONTEXT.md` when Brain context is relevant.
-- For repo work, infer the repo name/path.
-- If `Repos/<repo>/CONTEXT.md` exists, read it before planning or editing.
-- If repo context is missing for a non-trivial task, create or propose a concise repo bootstrap.
+- For repo work, infer the project path.
+- If the project has a wiki at `<project>/docs/wiki/`, read `_Index.md` before planning or editing.
+- If project wiki context is missing for a non-trivial task, create or propose a concise wiki scaffold.
 
-## Repo Memory
+## Project Wiki
 
-For new projects, create:
-
-```txt
-Repos/<repo>/
-├── CONTEXT.md
-├── ARCHITECTURE.md
-├── CODEMAP.md
-├── COMMANDS.md
-├── TODO.md
-└── LOG.md
-```
-
-Optional when useful:
+Each project owns its documentation in `docs/wiki/`:
 
 ```txt
-APIs.md
-GOTCHAS.md
-DECISIONS.md
-PROMPTS.md
+<project>/docs/wiki/
+├── _Index.md
+├── Templates/
+│   ├── architecture-note.md
+│   ├── api-note.md
+│   ├── feature-note.md
+│   └── decision-note.md
+├── features/
+├── architecture/
+├── api/
+└── decisions/
 ```
+
+The project wiki is the single source of truth for architecture, features, APIs, decisions, commands, gotchas, and follow-ups. It is version-controlled with the project.
 
 ## Durable Prompts
 
 If the user gives a long-lived spec, reusable prompt, product goal, or operating rule:
 
 - ask whether to save it;
-- save under `Prompts/` or the relevant `Repos/<repo>/`;
-- use clear filenames with kebab-case slugs;
+- save under `Prompts/` with kebab-case slugs, or as a project wiki note when it belongs to one project;
 - do not save casual chat unless explicitly requested.
 
 ## Write Policy
@@ -63,16 +56,14 @@ If the user gives a long-lived spec, reusable prompt, product goal, or operating
 Auto-update allowed:
 
 - `Daily/YYYY-MM-DD.md`
-- `Repos/*/LOG.md`
-- `Repos/*/TODO.md`
-- new repo bootstrap docs for the active project
+- `Prompts/*` after explicit user request/confirmation
+- new wiki scaffold for the active project
 
 Ask before modifying:
 
 - global `CONTEXT.md`
 - `AGENTS.md`
-- existing stable `Repos/*/CONTEXT.md`
-- `Repos/*/DECISIONS.md`
+- existing stable wiki notes
 
 ## Secrets Policy
 
@@ -95,13 +86,13 @@ Requires GitHub App credentials via environment variables.
 
 Do not paste actual values.
 
-## Repo Docs Style
+## Wiki Docs Style
 
 Keep docs concise and searchable.
 
 Include:
 
-- local path
+- repo-relative paths by default; absolute local paths only when explicitly needed and safe
 - purpose
 - stack
 - entrypoints
@@ -121,7 +112,7 @@ Use Brain RAG when:
 
 - the user references past context
 - the request is broad or ambiguous
-- repo context may exist
+- project wiki context may exist
 - exact files are unknown
 - searching durable prompts/specs/decisions
 
@@ -135,7 +126,7 @@ Use hybrid search for:
 
 ## Updates After Work
 
-After meaningful work, update Brain when useful:
+Meaningful work includes:
 
 - non-trivial diff
 - bug fix
@@ -144,11 +135,11 @@ After meaningful work, update Brain when useful:
 - new follow-up
 - durable decision
 
-Append concise notes to `LOG.md`; update `TODO.md` only for actionable follow-ups.
+Update the project wiki when useful: add dated notes under `decisions/` or `features/`, update `features/todo.md` only for actionable follow-ups, and refresh `_Index.md` when adding notes.
 
 ## Concurrency
 
-Subagents should not write Brain files directly if the primary session is also writing them.
+Subagents should not write Brain or wiki files directly if the primary session is also writing them.
 
 Subagents should return:
 

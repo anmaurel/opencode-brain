@@ -44,12 +44,22 @@ function expandEnvValue(value, env) {
     .replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, name) => env[name] ?? "");
 }
 
-const env = {
+const envFromFile = {
   HOME: home,
   OPENCODE_CONFIG_DIR: configDir,
   ...(await readEnvFile(path.join(configDir, ".env.example"))),
   ...(await readEnvFile(path.join(configDir, ".env"))),
-  ...process.env,
+};
+
+// Only use process.env for non-OPENCODE vars (shell env like PATH, HOME, etc.)
+// OPENCODE vars must come from .env files to respect mode switching.
+const envExternal = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.startsWith("OPENCODE_") && !key.startsWith("BRAIN_"))
+);
+
+const env = {
+  ...envFromFile,
+  ...envExternal,
   ...(await readEnvFile(path.join(configDir, ".env.local")))
 };
 

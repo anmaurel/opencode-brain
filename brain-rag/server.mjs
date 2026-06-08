@@ -10,13 +10,24 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-const BRAIN_ROOT = process.env.BRAIN_RAG_ROOT || path.join(os.homedir(), "brain");
+const BRAIN_ROOT = process.env.BRAIN_RAG_ROOT || process.env.BRAIN_ROOT || path.join(os.homedir(), "brain");
 const LMSTUDIO_EMBED_URL = process.env.BRAIN_RAG_EMBED_URL || "http://localhost:1234/v1/embeddings";
-const EMBED_MODEL = process.env.BRAIN_RAG_EMBED_MODEL || "text-embedding-bge-m3";
+const EMBED_MODEL = process.env.BRAIN_RAG_EMBED_MODEL || "text-embedding-baai-bge-m3-568m";
 const QDRANT_URL = (process.env.BRAIN_RAG_QDRANT_URL || "http://localhost:6333").replace(/\/$/, "");
 const COLLECTION = process.env.BRAIN_RAG_COLLECTION || "brain_chunks";
-const CHUNK_WORDS = Number(process.env.BRAIN_RAG_CHUNK_WORDS || 450);
-const CHUNK_OVERLAP = Number(process.env.BRAIN_RAG_CHUNK_OVERLAP || 80);
+const CHUNK_WORDS = positiveInt(process.env.BRAIN_RAG_CHUNK_WORDS, 320);
+const CHUNK_OVERLAP = positiveInt(process.env.BRAIN_RAG_CHUNK_OVERLAP, 50);
+const SEARCH_LIMIT = positiveInt(process.env.BRAIN_RAG_SEARCH_LIMIT, 5);
+const CONTEXT_LIMIT = positiveInt(process.env.BRAIN_RAG_CONTEXT_LIMIT, 3);
+const RESULT_LIMIT_CAP = positiveInt(process.env.BRAIN_RAG_RESULT_LIMIT_CAP, 20);
+const SEARCH_MAX_CHARS = nonNegativeInt(process.env.BRAIN_RAG_SEARCH_MAX_CHARS, 900);
+const CONTEXT_MAX_CHARS = nonNegativeInt(process.env.BRAIN_RAG_CONTEXT_MAX_CHARS, 700);
+const RESULT_MAX_CHARS_CAP = nonNegativeInt(process.env.BRAIN_RAG_RESULT_MAX_CHARS_CAP, 5000);
+const EXTERNAL_ALLOWED_PATHS = (process.env.BRAIN_RAG_ALLOWED_PATHS || "")
+  .split(path.delimiter)
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .map((item) => path.resolve(item.replace(/^~(?=$|\/)/, os.homedir())));
 const REINDEX_ON_STARTUP = process.env.BRAIN_RAG_REINDEX_ON_STARTUP === "true";
 const WATCH_ENABLED = process.env.BRAIN_RAG_WATCH === "true";
 const REINDEX_INTERVAL_MS = Number(process.env.BRAIN_RAG_REINDEX_INTERVAL_MS || 0);
@@ -30,29 +41,36 @@ let watchTimer = null;
 const tools = [
   {
     name: "brain_status",
-    description: "Check Brain RAG configuration, Qdrant connectivity, and collection status.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false }
-  },
-  {
-    name: "brain_reindex",
-    description: "Reindex Markdown notes from the Brain vault into Qdrant.",
+    description: "Check Brain RAG status.",
     inputSchema: {
       type: "object",
       properties: {
-        repo: { type: "string", description: "Optional repo folder under Repos/ to index." },
-        limit: { type: "number", description: "Optional max number of files to index." }
+        deep: { type: "boolean", default: false, description: "Also test embeddings." }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "brain_reindex",
+    description: "Reindex Markdown notes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string" },
+        path: { type: "string" },
+        limit: { type: "number" }
       },
       additionalProperties: false
     }
   },
   {
     name: "brain_ingest_path",
-    description: "Ingest a Markdown/text/PDF file or recursively ingest a directory under the Brain vault.",
+    description: "Ingest file or directory.",
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Absolute path or Brain-relative path." },
-        source_type: { type: "string", enum: ["markdown", "pdf", "text"], description: "Optional source type override." }
+        path: { type: "string" },
+        source_type: { type: "string", enum: ["markdown", "pdf", "text"] }
       },
       required: ["path"],
       additionalProperties: false
@@ -60,7 +78,7 @@ const tools = [
   },
   {
     name: "brain_ingest_url",
-    description: "Fetch, clean, chunk, embed, and store a web page in Qdrant.",
+    description: "Ingest a public URL.",
     inputSchema: {
       type: "object",
       properties: {
@@ -73,16 +91,18 @@ const tools = [
   },
   {
     name: "brain_search",
-    description: "Search over the Brain vector index. Use hybrid mode for code repos, symbols, filenames, commands, and exact identifiers.",
+    description: "Search Brain index.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string" },
-        limit: { type: "number", default: 8 },
-        repo: { type: "string", description: "Optional repo metadata filter." },
+        limit: { type: "number", default: 5, minimum: 1 },
+        repo: { type: "string" },
         source_type: { type: "string", enum: ["markdown", "pdf", "web", "text"] },
-        doc_type: { type: "string", description: "Optional repo-doc type filter, e.g. context, architecture, codemap, decisions, log, todo, apis, commands, gotchas." },
-        mode: { type: "string", enum: ["semantic", "keyword", "hybrid"], default: "semantic" }
+        doc_type: { type: "string" },
+        mode: { type: "string", enum: ["semantic", "keyword", "hybrid"], default: "semantic" },
+        max_chars: { type: "number", default: 900, minimum: 0, maximum: 5000 },
+        include_text: { type: "boolean", default: true }
       },
       required: ["query"],
       additionalProperties: false
@@ -90,17 +110,19 @@ const tools = [
   },
   {
     name: "brain_search_context",
-    description: "Search Brain and include neighboring chunks from the same source for code-repo context.",
+    description: "Search with neighboring chunks.",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string" },
-        limit: { type: "number", default: 5 },
-        repo: { type: "string", description: "Optional repo metadata filter." },
+        limit: { type: "number", default: 3, minimum: 1 },
+        repo: { type: "string" },
         source_type: { type: "string", enum: ["markdown", "pdf", "web", "text"] },
         doc_type: { type: "string" },
         mode: { type: "string", enum: ["semantic", "keyword", "hybrid"], default: "hybrid" },
-        neighbors: { type: "number", default: 1 }
+        neighbors: { type: "number", default: 1, minimum: 0 },
+        max_chars: { type: "number", default: 700, minimum: 0, maximum: 5000 },
+        include_text: { type: "boolean", default: true }
       },
       required: ["query"],
       additionalProperties: false
@@ -124,6 +146,16 @@ function textResult(value) {
   return { content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }] };
 }
 
+function positiveInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function nonNegativeInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 function cleanText(input) {
   return String(input || "")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -139,6 +171,26 @@ function cleanText(input) {
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function truncateText(text, maxChars) {
+  if (text === undefined || text === null) return undefined;
+  const value = String(text);
+  if (maxChars === 0) return undefined;
+  if (!maxChars || value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars).trim()}…`;
+}
+
+function textOptions(args, fallbackMaxChars) {
+  const maxChars = nonNegativeInt(args.max_chars, fallbackMaxChars);
+  return {
+    include_text: args.include_text !== false,
+    max_chars: Math.min(maxChars, RESULT_MAX_CHARS_CAP)
+  };
+}
+
+function resultLimit(value, fallback) {
+  return Math.min(positiveInt(value, fallback), RESULT_LIMIT_CAP);
 }
 
 function wordChunks(text, meta) {
@@ -255,9 +307,15 @@ function toPointId(value) {
 }
 
 function detectRepo(filePath) {
+  if (!filePath) return undefined;
   const parts = filePath.split(path.sep);
-  const idx = parts.lastIndexOf("Repos");
-  return idx >= 0 ? parts[idx + 1] : undefined;
+  // Legacy: detect from Repos/<repo>/ structure
+  const reposIdx = parts.lastIndexOf("Repos");
+  if (reposIdx >= 0 && parts[reposIdx + 1]) return parts[reposIdx + 1];
+  // New: detect from <project>/docs/wiki/ structure
+  const docsIdx = parts.lastIndexOf("docs");
+  if (docsIdx >= 0 && parts[docsIdx + 1] === "wiki" && docsIdx > 0) return parts[docsIdx - 1];
+  return undefined;
 }
 
 function relativeBrainPath(filePath) {
@@ -312,11 +370,28 @@ function extractTags(text) {
 async function resolveBrainPath(input) {
   const candidate = path.isAbsolute(input) ? path.resolve(input) : path.resolve(BRAIN_ROOT, input);
   const root = await fs.realpath(BRAIN_ROOT);
-  const resolved = await fs.realpath(candidate);
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
-    throw new Error(`Path outside Brain root is not allowed: ${input}`);
+  const candidateNorm = path.resolve(candidate);
+  // Allow paths inside Brain root
+  if (candidateNorm === root || candidateNorm.startsWith(`${root}${path.sep}`)) {
+    const resolved = await fs.realpath(candidate);
+    if (resolved === root || resolved.startsWith(`${root}${path.sep}`) || isAllowedExternalPath(resolved)) return resolved;
+    throw new Error(`Symlink target is not an allowed docs/wiki path: ${input}`);
   }
-  return resolved;
+  // Allow explicit external project wiki paths only.
+  if (path.isAbsolute(input)) {
+    const resolved = await fs.realpath(candidate);
+    if (!isAllowedExternalPath(resolved)) throw new Error(`External path is not an allowed docs/wiki path: ${input}`);
+    return resolved;
+  }
+  throw new Error(`Path outside Brain root is not allowed: ${input}`);
+}
+
+function isAllowedExternalPath(filePath) {
+  const normalized = path.resolve(filePath);
+  if (EXTERNAL_ALLOWED_PATHS.some((root) => normalized === root || normalized.startsWith(`${root}${path.sep}`))) return true;
+  const parts = normalized.split(path.sep);
+  const docsIdx = parts.lastIndexOf("docs");
+  return docsIdx >= 0 && parts[docsIdx + 1] === "wiki";
 }
 
 async function readSource(filePath, sourceType) {
@@ -329,14 +404,27 @@ async function readSource(filePath, sourceType) {
   return { text: await fs.readFile(filePath, "utf8"), source_type: type };
 }
 
-async function listFiles(root) {
+async function listFiles(root, visited = new Set()) {
+  const realRoot = await fs.realpath(root);
+  if (visited.has(realRoot)) return [];
+  visited.add(realRoot);
   const entries = await fs.readdir(root, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
     if ([".obsidian", ".git", "node_modules", "index"].includes(entry.name)) continue;
-    if (entry.isSymbolicLink()) continue;
+    if (entry.isSymbolicLink()) {
+      // Follow symlinks to external dirs (e.g. repo docs/wiki/ linked into Brain)
+      try {
+        const target = await fs.realpath(path.join(root, entry.name));
+        if (!isAllowedExternalPath(target) && !target.startsWith(`${await fs.realpath(BRAIN_ROOT)}${path.sep}`)) continue;
+        const targetStat = await fs.stat(target);
+        if (targetStat.isDirectory()) { files.push(...await listFiles(target, visited)); }
+        else if (/\.(md|txt|pdf)$/i.test(entry.name)) { files.push(target); }
+      } catch {}
+      continue;
+    }
     const full = path.join(root, entry.name);
-    if (entry.isDirectory()) files.push(...await listFiles(full));
+    if (entry.isDirectory()) files.push(...await listFiles(full, visited));
     else if (/\.(md|txt|pdf)$/i.test(entry.name)) files.push(full);
   }
   return files;
@@ -455,7 +543,8 @@ async function search(args) {
   const mode = args.mode || "semantic";
   if (mode === "keyword") return keywordSearch(args);
   const vector = await embed(args.query);
-  const requestedLimit = args.limit || 8;
+  const requestedLimit = resultLimit(args.limit, SEARCH_LIMIT);
+  const output = textOptions(args, SEARCH_MAX_CHARS);
   const body = {
     vector,
     limit: mode === "hybrid" ? Math.max(requestedLimit * 4, requestedLimit) : requestedLimit,
@@ -463,20 +552,28 @@ async function search(args) {
     filter: qdrantFilter(args)
   };
   const json = await qdrant(`/collections/${COLLECTION}/points/search`, { method: "POST", body: JSON.stringify(body) });
-  let results = (json.result || []).map((item) => formatSearchResult(item, item.score, item.score));
+  let results = (json.result || []).map((item) => ({
+    compact: formatSearchResult(item, item.score, item.score, output),
+    full: formatSearchResult(item, item.score, item.score, { include_text: true })
+  }));
   if (mode === "hybrid") {
     results = results
       .map((item) => {
-        const lex = lexicalScore(args.query, item);
-        return { ...item, lexical_score: lex, score: item.score + lex * 0.2 };
+        const lex = lexicalScore(args.query, item.full);
+        return { ...item.compact, lexical_score: lex, score: item.compact.score + lex * 0.2 };
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, requestedLimit);
+  } else {
+    results = results.map((item) => item.compact);
   }
   return results.slice(0, requestedLimit);
 }
 
-function formatSearchResult(item, score, vectorScore) {
+function formatSearchResult(item, score, vectorScore, options = {}) {
+  const includeText = options.include_text !== false;
+  const rawText = item.payload?.text;
+  const text = includeText ? truncateText(rawText, options.max_chars) : undefined;
   return {
     score,
     vector_score: vectorScore,
@@ -492,7 +589,7 @@ function formatSearchResult(item, score, vectorScore) {
     heading_path: item.payload?.heading_path,
     chunk_index: item.payload?.chunk_index,
     tags: item.payload?.tags,
-    text: item.payload?.text
+    ...(includeText && text !== undefined ? { text, truncated: rawText !== text } : {})
   };
 }
 
@@ -513,12 +610,14 @@ function lexicalScore(query, item) {
 }
 
 async function keywordSearch(args) {
-  const requestedLimit = args.limit || 8;
+  const requestedLimit = resultLimit(args.limit, SEARCH_LIMIT);
+  const output = textOptions(args, SEARCH_MAX_CHARS);
   const points = await scrollPayloads(qdrantFilter(args), 2000);
   return points
     .map((item) => {
-      const formatted = formatSearchResult(item, 0, undefined);
-      return { ...formatted, score: lexicalScore(args.query, formatted) };
+      const full = formatSearchResult(item, 0, undefined, { include_text: true });
+      const formatted = formatSearchResult(item, 0, undefined, output);
+      return { ...formatted, score: lexicalScore(args.query, full) };
     })
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -526,8 +625,10 @@ async function keywordSearch(args) {
 }
 
 async function searchContext(args) {
-  const neighbors = Math.max(0, Number(args.neighbors ?? 1));
-  const hits = await search({ ...args, mode: args.mode || "hybrid" });
+  const neighbors = nonNegativeInt(args.neighbors, 1);
+  const limit = resultLimit(args.limit, CONTEXT_LIMIT);
+  const output = textOptions(args, CONTEXT_MAX_CHARS);
+  const hits = await search({ ...args, limit, mode: args.mode || "hybrid", max_chars: output.max_chars, include_text: output.include_text });
   const contexts = [];
   for (const hit of hits) {
     const sourceKey = hit.source_path ? "source_path" : hit.url ? "url" : undefined;
@@ -545,7 +646,7 @@ async function searchContext(args) {
       ]
     }, Math.max(1, neighbors * 2 + 1));
     const context = points
-      .map((point) => formatSearchResult(point, point.payload?.chunk_index === hit.chunk_index ? hit.score : undefined, undefined))
+      .map((point) => formatSearchResult(point, point.payload?.chunk_index === hit.chunk_index ? hit.score : undefined, undefined, output))
       .filter((point) => point.chunk_index >= min && point.chunk_index <= max)
       .sort((a, b) => a.chunk_index - b.chunk_index);
     contexts.push({ hit, context });
@@ -566,7 +667,7 @@ async function scrollPayloads(filter, max = 1000) {
   return points;
 }
 
-async function status() {
+async function status(args = {}) {
   const out = {
     brain_root: BRAIN_ROOT,
     lmstudio_embed_url: LMSTUDIO_EMBED_URL,
@@ -580,12 +681,16 @@ async function status() {
     active_reindex: Boolean(activeReindex),
     last_reindex: lastReindex
   };
-  try {
-    const test = await embed("status check");
-    out.embedding_dimension = test.length;
-    out.lmstudio = "ok";
-  } catch (err) {
-    out.lmstudio = `error: ${err.message}`;
+  if (args.deep) {
+    try {
+      const test = await embed("status check");
+      out.embedding_dimension = test.length;
+      out.lmstudio = "ok";
+    } catch (err) {
+      out.lmstudio = `error: ${err.message}`;
+    }
+  } else {
+    out.lmstudio = "not checked; use deep=true";
   }
   try {
     const collection = await qdrant(`/collections/${COLLECTION}`);
@@ -598,7 +703,19 @@ async function status() {
 }
 
 async function reindex(args) {
-  const root = args.repo ? await resolveBrainPath(path.join("Repos", args.repo)) : BRAIN_ROOT;
+  let root;
+  if (args.path) {
+    root = await resolveBrainPath(args.path);
+  } else if (args.repo) {
+    // Legacy support: try Repos/<repo>/ first, then look for project wiki
+    try {
+      root = await resolveBrainPath(path.join("Repos", args.repo));
+    } catch {
+      throw new Error(`Cannot resolve path for repo "${args.repo}". Use the "path" parameter with the project wiki absolute path.`);
+    }
+  } else {
+    root = BRAIN_ROOT;
+  }
   let files = (await listFiles(root)).filter((file) => file.toLowerCase().endsWith(".md"));
   if (args.limit) files = files.slice(0, args.limit);
   let indexedFiles = 0;
@@ -665,7 +782,7 @@ function startAutomation() {
 }
 
 async function callTool(name, args = {}) {
-  if (name === "brain_status") return status();
+  if (name === "brain_status") return status(args);
   if (name === "brain_reindex") return runReindex(args, "manual");
   if (name === "brain_ingest_path") return ingestPath(args);
   if (name === "brain_ingest_url") return ingestUrl(args);
