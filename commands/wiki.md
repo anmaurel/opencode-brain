@@ -1,6 +1,6 @@
 ---
 description: Ingest documentation into the project wiki and index it in Brain RAG
-agent: build
+agent: brain
 ---
 
 Ingest `$ARGUMENTS` into `<project>/docs/wiki/`, then index with Brain RAG.

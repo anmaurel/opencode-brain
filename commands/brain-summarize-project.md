@@ -1,6 +1,6 @@
 ---
 description: Summarize a source project into docs/wiki and index it
-agent: build
+agent: brain
 ---
 
 Analyze a project, create/update concise `docs/wiki/`, then index with Brain RAG. Arguments: path or `repo=<name> <path>`.

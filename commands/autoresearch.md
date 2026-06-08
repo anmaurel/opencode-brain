@@ -1,6 +1,6 @@
 ---
 description: Conduct autonomous technical research, create wiki notes, and index in Brain RAG
-agent: build
+agent: brain
 ---
 
 Conduct autonomous technical research on the topic in $ARGUMENTS and produce structured notes in `docs/wiki/`, then index them in the Brain RAG.

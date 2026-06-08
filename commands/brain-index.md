@@ -1,5 +1,6 @@
 ---
 description: Index Brain project docs or URLs
+agent: brain
 ---
 
 Index the requested documentation into the Brain RAG without delegating to subagents.

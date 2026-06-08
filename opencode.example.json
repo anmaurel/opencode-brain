@@ -18,7 +18,9 @@
   },
   "permission": {
     "edit": "allow",
-    "bash": "allow"
+    "bash": "allow",
+    "brain_fs*": "deny",
+    "brain_rag*": "deny"
   },
   "provider": {
     "anthropic": {
@@ -70,10 +72,29 @@
     }
   },
   "tools": {
-    "brain_fs*": true,
-    "brain_rag*": true
+    "brain_fs*": false,
+    "brain_rag*": false
   },
   "agent": {
+    "brain": {
+      "model": "$OPENCODE_MODEL_DEFAULT",
+      "prompt": "{file:$OPENCODE_CONFIG_DIR/prompts/build.md}",
+      "tools": {
+        "brain_fs*": true,
+        "brain_rag*": true
+      },
+      "permission": {
+        "edit": "allow",
+        "bash": "allow",
+        "brain_fs*": "allow",
+        "brain_rag*": "allow",
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "docs-writer": "allow"
+        }
+      }
+    },
     "build": {
       "model": "$OPENCODE_MODEL_DEFAULT",
       "prompt": "{file:$OPENCODE_CONFIG_DIR/prompts/build.md}",
@@ -96,9 +117,15 @@
     "plan": {
       "model": "$OPENCODE_MODEL_DEFAULT",
       "prompt": "{file:$OPENCODE_CONFIG_DIR/prompts/plan.md}",
+      "tools": {
+        "brain_fs*": true,
+        "brain_rag*": true
+      },
       "permission": {
         "edit": "deny",
         "bash": "ask",
+        "brain_fs*": "allow",
+        "brain_rag*": "allow",
         "task": {
           "*": "deny",
           "explore": "allow",
@@ -134,7 +161,15 @@
       "model": "$OPENCODE_MODEL_SMALL"
     },
     "explore": {
-      "model": "$OPENCODE_MODEL_SMALL"
+      "model": "$OPENCODE_MODEL_SMALL",
+      "tools": {
+        "brain_fs*": true,
+        "brain_rag*": true
+      },
+      "permission": {
+        "brain_fs*": "allow",
+        "brain_rag*": "allow"
+      }
     }
   },
   "plugin": [

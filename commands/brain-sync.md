@@ -1,6 +1,6 @@
 ---
 description: Sync project wiki or durable prompt into Brain RAG
-agent: build
+agent: brain
 ---
 
 Sync durable context. Arguments: empty/current project, path, `repo=<name> <path>`, or `prompt=<title>` plus prompt/spec text.
