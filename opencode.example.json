@@ -102,7 +102,7 @@
       "model": "$OPENCODE_MODEL_DEFAULT"
     },
     "web-researcher": {
-      "model": "$OPENCODE_MODEL_DEFAULT",
+      "model": "$OPENCODE_MODEL_SMALL",
       "tools": {
         "webfetch": true
       }
@@ -111,10 +111,13 @@
       "model": "$OPENCODE_MODEL_DEFAULT"
     },
     "tests-writer": {
-      "model": "$OPENCODE_MODEL_DEFAULT"
+      "model": "$OPENCODE_MODEL_SMALL"
     },
     "docs-writer": {
-      "model": "$OPENCODE_MODEL_DEFAULT"
+      "model": "$OPENCODE_MODEL_SMALL"
+    },
+    "explore": {
+      "model": "$OPENCODE_MODEL_SMALL"
     }
   },
   "plugin": [
