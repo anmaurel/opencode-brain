@@ -1,7 +1,6 @@
 ---
 description: Investigates bugs and traces issues through the codebase
 mode: subagent
-model: zai-coding-plan/glm-5.1
 temperature: 0.2
 steps: 15
 permission:

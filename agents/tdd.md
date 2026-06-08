@@ -1,7 +1,6 @@
 ---
 description: Implements features using strict TDD methodology - writes tests first, then implements, verifies each step
 mode: subagent
-model: zai-coding-plan/glm-5.1
 temperature: 0.2
 steps: 30
 permission:

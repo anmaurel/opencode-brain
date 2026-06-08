@@ -68,9 +68,18 @@ Optional environment variables:
 ```bash
 export BRAIN_ROOT="$HOME/brain"
 export OPENCODE_CONFIG_DIR="$HOME/.config/opencode"
+
+# Model tiers used in opencode.example.json
+export OPENCODE_MODEL_DEFAULT="anthropic/claude-sonnet-4-6"
+export OPENCODE_MODEL_SMALL="anthropic/claude-haiku-4-5-20251001"
+export OPENCODE_MODEL_HUGE="anthropic/claude-opus-4-7"
 ```
 
 Shell environment variables override `.env` values during rendering.
+
+`OPENCODE_MODEL_DEFAULT` is used for the top-level `model` and every agent. `OPENCODE_MODEL_SMALL` is used for `small_model`. `OPENCODE_MODEL_HUGE` is defined for ad-hoc overrides (e.g. point a specific agent at it in your local `opencode.example.json`).
+
+When new variables are added to `.env.example`, copy them into your local `.env` manually (the bootstrap script does not merge), then rerun `bun run render-config`.
 
 Manual fallback if rendering fails:
 

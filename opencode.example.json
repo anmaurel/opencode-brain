@@ -1,7 +1,7 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "openai/gpt-5.5",
-  "small_model": "zai-coding-plan/glm-5.1",
+  "model": "$OPENCODE_MODEL_DEFAULT",
+  "small_model": "$OPENCODE_MODEL_SMALL",
   "instructions": [
     "$OPENCODE_CONFIG_DIR/instructions.md"
   ],
@@ -58,7 +58,7 @@
   },
   "agent": {
     "build": {
-      "model": "openai/gpt-5.5",
+      "model": "$OPENCODE_MODEL_DEFAULT",
       "prompt": "{file:$OPENCODE_CONFIG_DIR/prompts/build.md}",
       "permission": {
         "edit": "allow",
@@ -77,7 +77,7 @@
       }
     },
     "plan": {
-      "model": "openai/gpt-5.5",
+      "model": "$OPENCODE_MODEL_DEFAULT",
       "prompt": "{file:$OPENCODE_CONFIG_DIR/prompts/plan.md}",
       "permission": {
         "edit": "deny",
@@ -93,21 +93,28 @@
       }
     },
     "code-reviewer": {
-      "model": "openai/gpt-5.5"
+      "model": "$OPENCODE_MODEL_DEFAULT"
     },
     "debug": {
-      "model": "openai/gpt-5.5"
+      "model": "$OPENCODE_MODEL_DEFAULT"
     },
     "security-auditor": {
-      "model": "openai/gpt-5.5"
+      "model": "$OPENCODE_MODEL_DEFAULT"
     },
     "web-researcher": {
+      "model": "$OPENCODE_MODEL_DEFAULT",
       "tools": {
         "webfetch": true
       }
     },
     "tdd": {
-      "model": "openai/gpt-5.5"
+      "model": "$OPENCODE_MODEL_DEFAULT"
+    },
+    "tests-writer": {
+      "model": "$OPENCODE_MODEL_DEFAULT"
+    },
+    "docs-writer": {
+      "model": "$OPENCODE_MODEL_DEFAULT"
     }
   },
   "plugin": [

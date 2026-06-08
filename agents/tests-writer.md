@@ -1,7 +1,6 @@
 ---
 description: Writes unit and integration tests for existing code
 mode: subagent
-model: zai-coding-plan/glm-5.1
 temperature: 0.2
 steps: 15
 permission:

@@ -1,7 +1,6 @@
 ---
 description: Writes and maintains project documentation
 mode: subagent
-model: zai-coding-plan/glm-5.1
 temperature: 0.3
 steps: 10
 permission:

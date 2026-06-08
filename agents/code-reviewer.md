@@ -1,7 +1,6 @@
 ---
 description: Reviews code for quality, security, performance and best practices
 mode: subagent
-model: zai-coding-plan/glm-5.1
 temperature: 0.1
 steps: 10
 permission:

@@ -1,7 +1,6 @@
 ---
 description: Researches information on the web and synthesizes structured reports
 mode: subagent
-model: zai-coding-plan/glm-5.1
 temperature: 0.3
 steps: 20
 permission:
