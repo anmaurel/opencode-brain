@@ -8,13 +8,13 @@
   "compaction": {
     "auto": true,
     "prune": true,
-    "tail_turns": 3,
-    "preserve_recent_tokens": 6000,
-    "reserved": 10000
+    "tail_turns": "$OPENCODE_COMPACTION_TAIL_TURNS",
+    "preserve_recent_tokens": "$OPENCODE_COMPACTION_PRESERVE_TOKENS",
+    "reserved": "$OPENCODE_COMPACTION_RESERVED"
   },
   "tool_output": {
-    "max_lines": 120,
-    "max_bytes": 12000
+    "max_lines": "$OPENCODE_TOOL_MAX_LINES",
+    "max_bytes": "$OPENCODE_TOOL_MAX_BYTES"
   },
   "permission": {
     "edit": "allow",
@@ -65,7 +65,9 @@
         "BRAIN_RAG_REINDEX_ON_STARTUP": "$BRAIN_RAG_REINDEX_ON_STARTUP",
         "BRAIN_RAG_WATCH": "$BRAIN_RAG_WATCH",
         "BRAIN_RAG_REINDEX_INTERVAL_MS": "$BRAIN_RAG_REINDEX_INTERVAL_MS",
-        "BRAIN_RAG_WATCH_DEBOUNCE_MS": "$BRAIN_RAG_WATCH_DEBOUNCE_MS"
+        "BRAIN_RAG_WATCH_DEBOUNCE_MS": "$BRAIN_RAG_WATCH_DEBOUNCE_MS",
+        "BRAIN_RAG_FTS5_PATH": "$BRAIN_RAG_FTS5_PATH",
+        "BRAIN_MEMORY_ENABLED": "$BRAIN_MEMORY_ENABLED"
       },
       "enabled": true,
       "timeout": 60000
@@ -103,14 +105,10 @@
         "bash": "allow",
         "task": {
           "*": "deny",
-          "general": "allow",
           "explore": "allow",
           "debug": "allow",
           "code-reviewer": "allow",
-          "docs-writer": "allow",
-          "security-auditor": "allow",
-          "tests-writer": "allow",
-          "tdd": "allow"
+          "tests-writer": "allow"
         }
       }
     },

@@ -85,9 +85,78 @@ function unresolvedVariables(value, found = []) {
   return found;
 }
 
+function envBool(name, fallback = false) {
+  const value = env[name];
+  if (value === undefined || value === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+function envInt(name, fallback) {
+  const parsed = Number(env[name]);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function setBrainAccess(agent, enabled) {
+  if (!agent || typeof agent !== "object") return;
+  if (agent.tools) {
+    if ("brain_fs*" in agent.tools) agent.tools["brain_fs*"] = enabled;
+    if ("brain_rag*" in agent.tools) agent.tools["brain_rag*"] = enabled;
+  }
+  if (agent.permission) {
+    if ("brain_fs*" in agent.permission) agent.permission["brain_fs*"] = enabled ? "allow" : "deny";
+    if ("brain_rag*" in agent.permission) agent.permission["brain_rag*"] = enabled ? "allow" : "deny";
+  }
+}
+
+function applyTokenProfile(config) {
+  const brainEnabled = envBool("BRAIN_ENABLED", true);
+  const memoryEnabled = envBool("BRAIN_MEMORY_ENABLED", false);
+
+  config.tool_output ??= {};
+  config.tool_output.max_lines = envInt("OPENCODE_TOOL_MAX_LINES", Number(config.tool_output.max_lines) || 120);
+  config.tool_output.max_bytes = envInt("OPENCODE_TOOL_MAX_BYTES", Number(config.tool_output.max_bytes) || 12000);
+
+  config.compaction ??= {};
+  config.compaction.tail_turns = envInt("OPENCODE_COMPACTION_TAIL_TURNS", Number(config.compaction.tail_turns) || 3);
+  config.compaction.preserve_recent_tokens = envInt("OPENCODE_COMPACTION_PRESERVE_TOKENS", Number(config.compaction.preserve_recent_tokens) || 6000);
+  config.compaction.reserved = envInt("OPENCODE_COMPACTION_RESERVED", Number(config.compaction.reserved) || 10000);
+
+  if (config.mcp?.brain_fs) config.mcp.brain_fs.enabled = brainEnabled;
+  if (config.mcp?.brain_rag) {
+    config.mcp.brain_rag.enabled = brainEnabled;
+    config.mcp.brain_rag.environment ??= {};
+    config.mcp.brain_rag.environment.BRAIN_MEMORY_ENABLED = String(memoryEnabled);
+  }
+
+  if (config.tools) {
+    config.tools["brain_fs*"] = false;
+    config.tools["brain_rag*"] = false;
+  }
+  if (config.permission) {
+    config.permission["brain_fs*"] = "deny";
+    config.permission["brain_rag*"] = "deny";
+  }
+
+  if (config.agent) {
+    for (const agent of Object.values(config.agent)) setBrainAccess(agent, brainEnabled);
+    if (!brainEnabled) delete config.agent.brain;
+
+    // Lean default: avoid subagent fan-out unless explicitly requested.
+    if (config.agent.build?.permission?.task) {
+      config.agent.build.permission.task = {
+        "*": "deny",
+        explore: "allow",
+        debug: "allow"
+      };
+    }
+  }
+
+  return config;
+}
+
 const inputPath = path.join(configDir, "opencode.example.json");
 const outputPath = path.join(configDir, "opencode.json");
-const config = expand(JSON.parse(await fs.readFile(inputPath, "utf8")));
+const config = applyTokenProfile(expand(JSON.parse(await fs.readFile(inputPath, "utf8"))));
 const rendered = JSON.stringify(config, null, 2);
 const unresolved = unresolvedVariables(config);
 

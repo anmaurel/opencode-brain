@@ -7,14 +7,20 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { Database } from "bun:sqlite";
 
 const execFileAsync = promisify(execFile);
+
+function expandUserPath(value) {
+  return String(value || "").replace(/^~(?=$|\/)/, os.homedir());
+}
 
 const BRAIN_ROOT = process.env.BRAIN_RAG_ROOT || process.env.BRAIN_ROOT || path.join(os.homedir(), "brain");
 const LMSTUDIO_EMBED_URL = process.env.BRAIN_RAG_EMBED_URL || "http://localhost:1234/v1/embeddings";
 const EMBED_MODEL = process.env.BRAIN_RAG_EMBED_MODEL || "text-embedding-baai-bge-m3-568m";
 const QDRANT_URL = (process.env.BRAIN_RAG_QDRANT_URL || "http://localhost:6333").replace(/\/$/, "");
 const COLLECTION = process.env.BRAIN_RAG_COLLECTION || "brain_chunks";
+const FTS5_PATH = process.env.BRAIN_RAG_FTS5_PATH ? expandUserPath(process.env.BRAIN_RAG_FTS5_PATH) : path.join(os.homedir(), ".cache", "brain-rag", "fts5.sqlite");
 const CHUNK_WORDS = positiveInt(process.env.BRAIN_RAG_CHUNK_WORDS, 320);
 const CHUNK_OVERLAP = positiveInt(process.env.BRAIN_RAG_CHUNK_OVERLAP, 50);
 const SEARCH_LIMIT = positiveInt(process.env.BRAIN_RAG_SEARCH_LIMIT, 5);
@@ -32,13 +38,123 @@ const REINDEX_ON_STARTUP = process.env.BRAIN_RAG_REINDEX_ON_STARTUP === "true";
 const WATCH_ENABLED = process.env.BRAIN_RAG_WATCH === "true";
 const REINDEX_INTERVAL_MS = Number(process.env.BRAIN_RAG_REINDEX_INTERVAL_MS || 0);
 const WATCH_DEBOUNCE_MS = Number(process.env.BRAIN_RAG_WATCH_DEBOUNCE_MS || 10000);
+const MEMORY_ENABLED = process.env.BRAIN_MEMORY_ENABLED === "true";
 
 let activeReindex = null;
 let lastReindex = null;
 let watchStatus = "disabled";
 let watchTimer = null;
 
-const tools = [
+// ── SQLite + FTS5 + Memory ──────────────────────────────────────────
+await fs.mkdir(path.dirname(FTS5_PATH), { recursive: true });
+const db = new Database(FTS5_PATH, { create: true });
+db.exec("PRAGMA journal_mode=WAL");
+db.exec("PRAGMA synchronous=NORMAL");
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS brain_chunks (
+    rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+    point_id TEXT UNIQUE,
+    chunk_index INTEGER,
+    text TEXT,
+    source_path TEXT,
+    relative_path TEXT,
+    source_type TEXT,
+    doc_type TEXT,
+    repo TEXT,
+    tags TEXT,
+    heading_path TEXT,
+    title TEXT,
+    url TEXT,
+    language TEXT,
+    file_hash TEXT
+  );
+`);
+
+// FTS5 on brain_chunks — standalone (no content=) for reliable sync
+const ftsExists = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='brain_fts'").get();
+if (!ftsExists) {
+  db.exec(`
+    CREATE VIRTUAL TABLE brain_fts USING fts5(
+      text, source_path, relative_path, source_type, doc_type,
+      repo, tags, heading_path, title, language,
+      tokenize='unicode61'
+    );
+  `);
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS memories (
+    id TEXT PRIMARY KEY,
+    key TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tags TEXT,
+    project TEXT,
+    source_session TEXT,
+    confidence REAL DEFAULT 1.0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_memories_key ON memories(key);
+  CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project);
+`);
+
+const memFtsExists = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='memory_fts'").get();
+if (!memFtsExists) {
+  db.exec(`
+    CREATE VIRTUAL TABLE memory_fts USING fts5(
+      content, key, tags, project,
+      tokenize='unicode61'
+    );
+  `);
+}
+
+// Prepared statements for FTS5 chunk indexing
+const stmtInsertChunk = db.prepare(`
+  INSERT OR REPLACE INTO brain_chunks (point_id, chunk_index, text, source_path, relative_path, source_type, doc_type, repo, tags, heading_path, title, url, language, file_hash)
+  VALUES ($point_id, $chunk_index, $text, $source_path, $relative_path, $source_type, $doc_type, $repo, $tags, $heading_path, $title, $url, $language, $file_hash)
+`);
+const stmtDeleteSource = db.prepare(`DELETE FROM brain_chunks WHERE source_path = $source_path OR url = $url`);
+const stmtFtsInsert = db.prepare(`
+  INSERT INTO brain_fts(rowid, text, source_path, relative_path, source_type, doc_type, repo, tags, heading_path, title, language)
+  VALUES ($rowid, $text, $source_path, $relative_path, $source_type, $doc_type, $repo, $tags, $heading_path, $title, $language)
+`);
+const stmtFtsDeleteByRowid = db.prepare(`DELETE FROM brain_fts WHERE rowid = $rowid`);
+const stmtFtsSearch = db.prepare(`
+  SELECT bc.rowid, bc.text, bc.source_path, bc.relative_path, bc.source_type, bc.doc_type,
+         bc.repo, bc.tags, bc.heading_path, bc.title, bc.url, bc.language, bc.chunk_index, bf.rank
+  FROM brain_fts bf JOIN brain_chunks bc ON bf.rowid = bc.rowid
+  WHERE bf.brain_fts MATCH $query
+  ORDER BY bf.rank
+  LIMIT $limit
+`);
+const stmtFtsCount = db.prepare(`SELECT count(*) as c FROM brain_chunks`);
+
+// Prepared statements for memory
+const stmtMemPut = db.prepare(`
+  INSERT OR REPLACE INTO memories (id, key, content, tags, project, source_session, confidence, created_at, updated_at)
+  VALUES ($id, $key, $content, $tags, $project, $source_session, $confidence, $created_at, $updated_at)
+`);
+const stmtMemGet = db.prepare(`SELECT * FROM memories WHERE id = $id`);
+const stmtMemDelete = db.prepare(`DELETE FROM memories WHERE id = $id`);
+const stmtMemFtsInsert = db.prepare(`INSERT INTO memory_fts(rowid, content, key, tags, project) VALUES ($rowid, $content, $key, $tags, $project)`);
+const stmtMemFtsDelete = db.prepare(`DELETE FROM memory_fts WHERE rowid = $rowid`);
+const stmtMemList = db.prepare(`
+  SELECT * FROM memories
+  WHERE ($key IS NULL OR key = $key) AND ($project IS NULL OR project = $project)
+  ORDER BY updated_at DESC LIMIT $limit
+`);
+const stmtMemGetRowid = db.prepare(`SELECT rowid FROM memories WHERE id = $id`);
+const stmtMemFtsSearch = db.prepare(`
+  SELECT m.*, mf.rank
+  FROM memory_fts mf JOIN memories m ON mf.rowid = m.rowid
+  WHERE mf.memory_fts MATCH $query
+  ORDER BY mf.rank LIMIT $limit
+`);
+const stmtMemCount = db.prepare(`SELECT count(*) as c FROM memories`);
+
+const allTools = [
   {
     name: "brain_status",
     description: "Check Brain RAG status.",
@@ -127,8 +243,78 @@ const tools = [
       required: ["query"],
       additionalProperties: false
     }
+  },
+  {
+    name: "brain_memory_put",
+    description: "Store a user memory (preference, pattern, decision, or style). Only use when explicitly asked by the user.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string", enum: ["preference", "pattern", "decision", "style", "context"], description: "Category of the memory." },
+        content: { type: "string", description: "The memory content to store." },
+        tags: { type: "array", items: { type: "string" }, description: "Optional tags for retrieval." },
+        project: { type: "string", description: "Optional project/repo name this memory relates to." },
+        confidence: { type: "number", default: 1.0, minimum: 0, maximum: 1 }
+      },
+      required: ["key", "content"],
+      additionalProperties: false
+    }
+  },
+  {
+    name: "brain_memory_get",
+    description: "Retrieve a specific memory by its ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Memory ID." }
+      },
+      required: ["id"],
+      additionalProperties: false
+    }
+  },
+  {
+    name: "brain_memory_search",
+    description: "Search user memories by query. Returns memories matching keywords.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        key: { type: "string", enum: ["preference", "pattern", "decision", "style", "context"] },
+        project: { type: "string" },
+        limit: { type: "number", default: 5, minimum: 1 }
+      },
+      required: ["query"],
+      additionalProperties: false
+    }
+  },
+  {
+    name: "brain_memory_list",
+    description: "List stored memories, optionally filtered by category or project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string", enum: ["preference", "pattern", "decision", "style", "context"] },
+        project: { type: "string" },
+        limit: { type: "number", default: 20, minimum: 1 }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "brain_memory_delete",
+    description: "Delete a stored memory by ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Memory ID to delete." }
+      },
+      required: ["id"],
+      additionalProperties: false
+    }
   }
 ];
+
+const tools = MEMORY_ENABLED ? allTools : allTools.filter((tool) => !tool.name.startsWith("brain_memory_"));
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -433,6 +619,7 @@ async function listFiles(root, visited = new Set()) {
 async function ingestDocument({ text, source_path, source_type, title, url }) {
   const repo = source_path ? detectRepo(source_path) : undefined;
   const relative_path = relativeBrainPath(source_path);
+  const tags = extractTags(text);
   const chunks = chunkText(text, {
     source_path,
     relative_path,
@@ -443,7 +630,7 @@ async function ingestDocument({ text, source_path, source_type, title, url }) {
     title,
     url,
     repo,
-    tags: extractTags(text),
+    tags,
     updated_at: new Date().toISOString()
   });
   if (!chunks.length) return { chunks: 0, points: 0 };
@@ -468,6 +655,44 @@ async function ingestDocument({ text, source_path, source_type, title, url }) {
       body: JSON.stringify({ points: points.slice(i, i + 100) })
     });
   }
+  // Index into FTS5
+  const source = source_path || url;
+  db.transaction(() => {
+    for (let i = 0; i < chunks.length; i++) {
+      stmtInsertChunk.run({
+        $point_id: points[i].id,
+        $chunk_index: i,
+        $text: chunks[i].text,
+        $source_path: source_path || null,
+        $relative_path: relative_path || null,
+        $source_type: source_type || null,
+        $doc_type: chunks[i].meta.doc_type || null,
+        $repo: repo || null,
+        $tags: Array.isArray(tags) ? tags.join(" ") : (tags || null),
+        $heading_path: chunks[i].meta.heading_path || null,
+        $title: title || null,
+        $url: url || null,
+        $language: chunks[i].meta.language || null,
+        $file_hash: null
+      });
+      const row = db.query("SELECT rowid FROM brain_chunks WHERE point_id = ?").get(points[i].id);
+      if (row) {
+        stmtFtsInsert.run({
+          $rowid: row.rowid,
+          $text: chunks[i].text,
+          $source_path: source_path || "",
+          $relative_path: relative_path || "",
+          $source_type: source_type || "",
+          $doc_type: chunks[i].meta.doc_type || "",
+          $repo: repo || "",
+          $tags: Array.isArray(tags) ? tags.join(" ") : (tags || ""),
+          $heading_path: chunks[i].meta.heading_path || "",
+          $title: title || "",
+          $language: chunks[i].meta.language || ""
+        });
+      }
+    }
+  })();
   return { chunks: chunks.length, points: points.length };
 }
 
@@ -482,6 +707,18 @@ async function deleteExistingSource(source) {
   } catch {
     // Collection may be new or empty; upsert will recreate current source content.
   }
+  // Also delete from FTS5
+  try {
+    const rows = key === "url"
+      ? db.query("SELECT rowid FROM brain_chunks WHERE url = ?").all(source)
+      : db.query("SELECT rowid FROM brain_chunks WHERE source_path = ?").all(source);
+    for (const row of rows) stmtFtsDeleteByRowid.run({ $rowid: row.rowid });
+    if (key === "url") {
+      stmtDeleteSource.run({ $source_path: "", $url: source });
+    } else {
+      stmtDeleteSource.run({ $source_path: source, $url: "" });
+    }
+  } catch {}
 }
 
 async function ingestPath(args) {
@@ -564,6 +801,40 @@ async function search(args) {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, requestedLimit);
+    // Merge with FTS5 results via Reciprocal Rank Fusion
+    const ftsQ = fts5Query(args.query);
+    if (ftsQ) {
+      try {
+        const ftsRows = stmtFtsSearch.all({ $query: ftsQ, $limit: requestedLimit });
+        const ftsResults = ftsRows.map((row, idx) => {
+          const bm25Score = Math.max(0, 1 + row.rank);
+          return { ...formatFtsRow(row, output), score: bm25Score, _rank: idx + 1, _source: "fts5" };
+        });
+        if (ftsResults.length) {
+          const k = 60;
+          const rrfMap = new Map();
+          for (let i = 0; i < results.length; i++) {
+            const key = results[i].source_path || results[i].url || `v${i}`;
+            rrfMap.set(key, { ...results[i], _rrf: 1 / (k + i + 1), _rank: i + 1, _source: "vector" });
+          }
+          for (const fts of ftsResults) {
+            const key = fts.source_path || fts.url || `f${fts._rank}`;
+            const existing = rrfMap.get(key);
+            if (existing) {
+              existing._rrf += 1 / (k + fts._rank);
+              existing.fts5_score = fts.score;
+            } else {
+              rrfMap.set(key, { ...fts, _rrf: 1 / (k + fts._rank) });
+            }
+          }
+          results = [...rrfMap.values()]
+            .map((r) => ({ ...r, score: r._rrf }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, requestedLimit)
+            .map(({ _rrf, _rank, _source, fts5_score, ...rest }) => rest);
+        }
+      } catch {}
+    }
   } else {
     results = results.map((item) => item.compact);
   }
@@ -597,6 +868,15 @@ function lexicalTerms(query) {
   return [...new Set(String(query || "").toLowerCase().match(/[\p{L}\p{N}_.$/-]{2,}/gu) || [])];
 }
 
+// Escape a query for FTS5: wrap each term in quotes for safe MATCH
+function fts5Query(query) {
+  const terms = String(query || "")
+    .toLowerCase()
+    .match(/[\p{L}\p{N}_.$/-]{2,}/gu) || [];
+  return terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(" OR ");
+}
+
+// Legacy lexical score — kept as fallback when FTS5 has no data
 function lexicalScore(query, item) {
   const terms = lexicalTerms(query);
   if (!terms.length) return 0;
@@ -609,9 +889,44 @@ function lexicalScore(query, item) {
   return hits / terms.length;
 }
 
+function formatFtsRow(row, output) {
+  const rawText = row.text;
+  const text = output.include_text ? truncateText(rawText, output.max_chars) : undefined;
+  return {
+    score: undefined,
+    vector_score: undefined,
+    source_path: row.source_path,
+    relative_path: row.relative_path,
+    folder: row.relative_path ? path.dirname(row.relative_path) : undefined,
+    source_type: row.source_type,
+    doc_type: row.doc_type,
+    language: row.language,
+    repo: row.repo,
+    title: row.title,
+    url: row.url,
+    heading_path: row.heading_path,
+    chunk_index: row.chunk_index,
+    tags: row.tags ? row.tags.split(" ").filter(Boolean) : undefined,
+    ...(output.include_text && text !== undefined ? { text, truncated: rawText !== text } : {})
+  };
+}
+
 async function keywordSearch(args) {
   const requestedLimit = resultLimit(args.limit, SEARCH_LIMIT);
   const output = textOptions(args, SEARCH_MAX_CHARS);
+  const ftsQ = fts5Query(args.query);
+  if (!ftsQ) return [];
+  try {
+    const rows = stmtFtsSearch.all({ $query: ftsQ, $limit: requestedLimit });
+    if (rows.length) {
+      return rows.map((row) => {
+        // Convert FTS5 BM25 rank to a 0-1 score (rank is negative, closer to 0 = better)
+        const bm25Score = Math.max(0, 1 + row.rank);
+        return { ...formatFtsRow(row, output), score: bm25Score };
+      });
+    }
+  } catch {}
+  // Fallback to legacy lexical search if FTS5 has no data
   const points = await scrollPayloads(qdrantFilter(args), 2000);
   return points
     .map((item) => {
@@ -674,6 +989,7 @@ async function status(args = {}) {
     embed_model: EMBED_MODEL,
     qdrant_url: QDRANT_URL,
     collection: COLLECTION,
+    fts5_path: FTS5_PATH,
     reindex_on_startup: REINDEX_ON_STARTUP,
     watch_enabled: WATCH_ENABLED,
     watch_status: watchStatus,
@@ -698,6 +1014,13 @@ async function status(args = {}) {
     out.points_count = collection.result?.points_count ?? collection.result?.vectors_count;
   } catch (err) {
     out.qdrant = `error: ${err.message}`;
+  }
+  try {
+    out.fts5 = "ok";
+    out.fts5_chunks_count = stmtFtsCount.get().c;
+    out.memories_count = stmtMemCount.get().c;
+  } catch (err) {
+    out.fts5 = `error: ${err.message}`;
   }
   return out;
 }
@@ -781,13 +1104,131 @@ function startAutomation() {
   }
 }
 
+// ── Memory functions ────────────────────────────────────────────────
+
+function memoryPut(args) {
+  if (!args.key || !args.content) throw new Error("key and content are required");
+  const validKeys = ["preference", "pattern", "decision", "style", "context"];
+  if (!validKeys.includes(args.key)) throw new Error(`key must be one of: ${validKeys.join(", ")}`);
+  const id = args.id || crypto.randomUUID();
+  const now = new Date().toISOString();
+  const tags = Array.isArray(args.tags) ? args.tags.join(" ") : (args.tags || null);
+  // Check if updating existing
+  const existing = stmtMemGetRowid.get({ $id: id });
+  if (existing) stmtMemFtsDelete.run({ $rowid: existing.rowid });
+  stmtMemPut.run({
+    $id: id,
+    $key: args.key,
+    $content: args.content,
+    $tags: tags,
+    $project: args.project || null,
+    $source_session: now,
+    $confidence: args.confidence != null ? args.confidence : 1.0,
+    $created_at: now,
+    $updated_at: now
+  });
+  const row = stmtMemGetRowid.get({ $id: id });
+  stmtMemFtsInsert.run({
+    $rowid: row.rowid,
+    $content: args.content,
+    $key: args.key,
+    $tags: tags || "",
+    $project: args.project || ""
+  });
+  // Export to markdown for human readability
+  void exportMemoryMarkdown().catch(() => {});
+  return { id, key: args.key, stored: true };
+}
+
+function memoryGet(args) {
+  if (!args.id) throw new Error("id is required");
+  const row = stmtMemGet.get({ $id: args.id });
+  if (!row) throw new Error(`Memory not found: ${args.id}`);
+  return serializeMemoryRow(row);
+}
+
+function memorySearch(args) {
+  if (!args.query) throw new Error("query is required");
+  const ftsQ = fts5Query(args.query);
+  if (!ftsQ) return [];
+  try {
+    const rows = stmtMemFtsSearch.all({ $query: ftsQ, $limit: args.limit || 5 });
+    return rows.map((row) => serializeMemoryRow(row));
+  } catch {
+    return [];
+  }
+}
+
+function memoryList(args) {
+  return stmtMemList.all({
+    $key: args.key || null,
+    $project: args.project || null,
+    $limit: args.limit || 20
+  }).map(serializeMemoryRow);
+}
+
+function memoryDelete(args) {
+  if (!args.id) throw new Error("id is required");
+  const row = stmtMemGetRowid.get({ $id: args.id });
+  if (!row) throw new Error(`Memory not found: ${args.id}`);
+  stmtMemFtsDelete.run({ $rowid: row.rowid });
+  stmtMemDelete.run({ $id: args.id });
+  void exportMemoryMarkdown().catch(() => {});
+  return { id: args.id, deleted: true };
+}
+
+function serializeMemoryRow(row) {
+  return {
+    id: row.id,
+    key: row.key,
+    content: row.content,
+    tags: row.tags ? row.tags.split(" ").filter(Boolean) : [],
+    project: row.project,
+    source_session: row.source_session,
+    confidence: row.confidence,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+}
+
+async function exportMemoryMarkdown() {
+  const memDir = path.join(BRAIN_ROOT, "Memory");
+  await fs.mkdir(memDir, { recursive: true });
+  const rows = db.query("SELECT * FROM memories ORDER BY key, updated_at DESC").all();
+  const byKey = new Map();
+  for (const row of rows) {
+    const arr = byKey.get(row.key) || [];
+    arr.push(row);
+    byKey.set(row.key, arr);
+  }
+  for (const [key, items] of byKey) {
+    const lines = [`# ${key.charAt(0).toUpperCase() + key.slice(1)}s`, ""];
+    for (const item of items) {
+      lines.push(`## ${item.id}`);
+      lines.push(`- **key**: ${item.key}`);
+      if (item.project) lines.push(`- **project**: ${item.project}`);
+      if (item.tags) lines.push(`- **tags**: ${item.tags}`);
+      lines.push(`- **confidence**: ${item.confidence}`);
+      lines.push(`- **updated**: ${item.updated_at}`);
+      lines.push("", item.content, "");
+    }
+    await fs.writeFile(path.join(memDir, `${key}s.md`), lines.join("\n"), "utf8");
+  }
+}
+
 async function callTool(name, args = {}) {
+  if (!MEMORY_ENABLED && name?.startsWith("brain_memory_")) throw new Error("Brain memory tools are disabled (BRAIN_MEMORY_ENABLED=false)");
   if (name === "brain_status") return status(args);
   if (name === "brain_reindex") return runReindex(args, "manual");
   if (name === "brain_ingest_path") return ingestPath(args);
   if (name === "brain_ingest_url") return ingestUrl(args);
   if (name === "brain_search") return search(args);
   if (name === "brain_search_context") return searchContext(args);
+  if (name === "brain_memory_put") return memoryPut(args);
+  if (name === "brain_memory_get") return memoryGet(args);
+  if (name === "brain_memory_search") return memorySearch(args);
+  if (name === "brain_memory_list") return memoryList(args);
+  if (name === "brain_memory_delete") return memoryDelete(args);
   throw new Error(`Unknown tool: ${name}`);
 }
 

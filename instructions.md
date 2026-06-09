@@ -13,3 +13,10 @@
 - Save durable prompts only after explicit request/confirmation under `$BRAIN_ROOT/Prompts/` or as project wiki notes.
 - Never store secrets, tokens, raw `.env`, private keys, or personal data.
 - Use repo-relative paths in wiki docs by default; serialize Brain/wiki writes in the primary session.
+
+# User Memory
+
+- Memory tools (`brain_memory_*`) are available but **manual only**.
+- Store a memory only when the user explicitly asks ("souviens-toi que...", "stocke cette préférence", "note que...").
+- Never extract or store memories automatically.
+- Available: `brain_memory_put`, `brain_memory_search`, `brain_memory_get`, `brain_memory_list`, `brain_memory_delete`.

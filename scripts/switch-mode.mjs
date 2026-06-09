@@ -54,6 +54,9 @@ console.log(`\nSwitched to: ${mode}`);
 console.log(`  Model:  ${env.OPENCODE_MODEL_DEFAULT}`);
 console.log(`  Small:  ${env.OPENCODE_MODEL_SMALL}`);
 console.log(`  Huge:   ${env.OPENCODE_MODEL_HUGE}`);
+console.log(`  Brain:  ${env.BRAIN_ENABLED === "true" ? "enabled" : "disabled"}`);
+console.log(`  Memory: ${env.BRAIN_MEMORY_ENABLED === "true" ? "enabled" : "disabled"}`);
+console.log(`  Output: ${env.OPENCODE_TOOL_MAX_LINES || "default"} lines / ${env.OPENCODE_TOOL_MAX_BYTES || "default"} bytes`);
 console.log(`\nRestart OpenCode to apply changes.`);
 
 function parseEnv(content) {
