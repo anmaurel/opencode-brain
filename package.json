@@ -10,7 +10,7 @@
     "@opencode-ai/plugin": "1.16.2"
   },
   "scripts": {
-    "bootstrap": "bun install && bun run bootstrap-env && bun run render-config && bun run bootstrap-brain && docker compose -f brain-rag/docker-compose.yml up -d && bun run doctor",
+    "bootstrap": "bun install && bun run bootstrap-env && bun run render-config && bun run bootstrap-brain && docker compose -f brain/rag/docker-compose.yml up -d && bun run doctor",
     "bootstrap-brain": "bun scripts/bootstrap-brain.mjs",
     "bootstrap-env": "bun scripts/bootstrap-env.mjs",
     "doctor": "bun scripts/doctor.mjs",

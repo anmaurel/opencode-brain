@@ -35,5 +35,5 @@ bun run doctor -- --deep
 - Use Bun and keep `bun.lock` versioned.
 - Keep `.env.example` versioned with safe non-secret defaults; never commit local `.env`.
 - Keep `opencode.example.json` portable with `$HOME` and `$OPENCODE_CONFIG_DIR` placeholders.
-- Keep `brain-template/` generic and non-personal.
+- Keep `brain/template/` generic and non-personal.
 - Run `bun run public-safety-check` before any public push.

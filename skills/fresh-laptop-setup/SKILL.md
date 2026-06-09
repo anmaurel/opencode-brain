@@ -20,9 +20,9 @@ bun install
 bun run bootstrap
 ```
 
-If cloned elsewhere: set `OPENCODE_CONFIG_DIR=/absolute/path/to/opencode-config`. Manual fallback: `bun install`, `bun run bootstrap-env`, `bun run render-config`, `bun run bootstrap-brain`, `docker compose -f brain-rag/docker-compose.yml up -d`, `bun run doctor`; edit `.env`, rerender, restart OpenCode.
+If cloned elsewhere: set `OPENCODE_CONFIG_DIR=/absolute/path/to/opencode-config`. Manual fallback: `bun install`, `bun run bootstrap-env`, `bun run render-config`, `bun run bootstrap-brain`, `docker compose -f brain/rag/docker-compose.yml up -d`, `bun run doctor`; edit `.env`, rerender, restart OpenCode.
 
-Validate: local ignored `opencode.json`/`.env`, Brain root with `CONTEXT.md`, `AGENTS.md`, `Prompts/`, `Daily/`, `RAG/`, Qdrant and LM Studio endpoints OK, Brain tools/commands visible.
+Validate: local ignored `opencode.json`/`.env`, Brain root with `CONTEXT.md`, `AGENTS.md`, `Prompts/`, `RAG/`, Qdrant and LM Studio endpoints OK, Brain tools/commands visible.
 
 Common fixes: install Bun, start Docker/LM Studio, set config path, rerun render after `.env` edits. Bootstrap should not overwrite existing `.env` values or Brain files; skipped existing files are expected.
 

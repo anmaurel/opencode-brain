@@ -9,7 +9,6 @@ Store durable, non-secret context across sessions.
 ## Layout
 
 - `AGENTS.md` — agent operating rules.
-- `Daily/` — dated session logs.
 - `Prompts/` — durable prompts/specs.
 - `RAG/` — local RAG setup notes.
 

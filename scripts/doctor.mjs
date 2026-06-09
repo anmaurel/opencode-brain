@@ -62,7 +62,7 @@ for (const [name, args] of [["bun", ["--version"]], ["docker", ["--version"]]]) 
 }
 
 record((await exists(path.join(configDir, "opencode.json"))) ? "OK" : "FAIL", "opencode.json", path.join(configDir, "opencode.json"));
-record((await exists(path.join(configDir, "brain-rag", "server.mjs"))) ? "OK" : "FAIL", "brain-rag server", path.join(configDir, "brain-rag", "server.mjs"));
+record((await exists(path.join(configDir, "brain", "rag", "server.mjs"))) ? "OK" : "FAIL", "brain-rag server", path.join(configDir, "brain", "rag", "server.mjs"));
 record(brainRoot && (await exists(brainRoot)) ? "OK" : "WARN", "Brain root", brainRoot || "BRAIN_ROOT is empty");
 
 try {

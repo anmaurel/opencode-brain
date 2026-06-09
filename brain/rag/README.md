@@ -69,7 +69,7 @@ Use `brain_status` to see watcher status and the last reindex result.
 - Qdrant running locally, for example:
 
 ```bash
-docker compose -f ~/.config/opencode/brain-rag/docker-compose.yml up -d
+docker compose -f ~/.config/opencode/brain/rag/docker-compose.yml up -d
 ```
 
 Qdrant UI/API will be available at:
@@ -80,7 +80,7 @@ Qdrant UI/API will be available at:
 Stop it with:
 
 ```bash
-docker compose -f ~/.config/opencode/brain-rag/docker-compose.yml down
+docker compose -f ~/.config/opencode/brain/rag/docker-compose.yml down
 ```
 
 PDF ingestion requires `pdftotext` installed locally.

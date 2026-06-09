@@ -27,7 +27,7 @@ Les prompts custom, skills et commandes OpenCode ajoutent du contexte récurrent
 - `skills/brain-memory/SKILL.md` : skill condensée.
 - `commands/brain-sync.md`, `commands/wiki.md`, `commands/brain-summarize-project.md` : étapes condensées.
 - `agents/*.md`, `skills/*/SKILL.md` : corps condensés, permissions/frontmatter préservés.
-- `brain-rag/server.mjs` : schemas courts, résultats tronqués par défaut, metadata-only possible, `brain_status({ deep: true })` pour tester embeddings.
+- `brain/rag/server.mjs` : schemas courts, résultats tronqués par défaut, metadata-only possible, `brain_status({ deep: true })` pour tester embeddings.
 - `.env*` : chunks/search defaults plus compacts, reindex startup/périodique désactivés par défaut.
 
 ## Vérification

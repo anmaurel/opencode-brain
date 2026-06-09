@@ -55,7 +55,6 @@ If the user gives a long-lived spec, reusable prompt, product goal, or operating
 
 Auto-update allowed:
 
-- `Daily/YYYY-MM-DD.md`
 - `Prompts/*` after explicit user request/confirmation
 - new wiki scaffold for the active project
 

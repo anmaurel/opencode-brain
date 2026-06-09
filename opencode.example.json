@@ -46,7 +46,7 @@
       "command": [
         "sh",
         "-lc",
-        "BRAIN_RAG_ROOT=\"$BRAIN_ROOT\" exec bun \"$OPENCODE_CONFIG_DIR/brain-rag/server.mjs\""
+        "BRAIN_RAG_ROOT=\"$BRAIN_ROOT\" exec bun \"$OPENCODE_CONFIG_DIR/brain/rag/server.mjs\""
       ],
       "environment": {
         "BRAIN_RAG_EMBED_URL": "$BRAIN_RAG_EMBED_URL",

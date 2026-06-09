@@ -6,8 +6,8 @@ Portable OpenCode configuration with local Brain RAG/MCP support for macOS.
 
 - `opencode.example.json` is the portable template used to generate local `opencode.json`.
 - `opencode.json` is intentionally ignored because it contains machine-local expanded paths.
-- `brain-rag/` contains the local MCP server for semantic search over the Brain vault.
-- `brain-template/` contains a safe empty Brain vault template for fresh machines.
+- `brain/rag/` contains the local MCP server for semantic search over the Brain vault.
+- `brain/template/` contains a safe empty Brain vault template for fresh machines.
 - `agents/`, `commands/`, `prompts/`, and `skills/` contain OpenCode customizations.
 - `scripts/` contains bootstrap, config render, and doctor scripts.
 
@@ -31,7 +31,7 @@ bun install
 bun run bootstrap
 ```
 
-`bun run bootstrap` creates local `.env` if missing, renders local config, creates a fresh Brain vault from `brain-template/` without overwriting existing files, starts Qdrant, and runs diagnostics.
+`bun run bootstrap` creates local `.env` if missing, renders local config, creates a fresh Brain vault from `brain/template/` without overwriting existing files, starts Qdrant, and runs diagnostics.
 
 Clone to `~/.config/opencode` by default. If you clone elsewhere, set `OPENCODE_CONFIG_DIR` to that absolute path before rendering config.
 
@@ -118,7 +118,7 @@ Custom `.env.*` files are ignored by git (only `.env.work`, `.env.perso-high`, `
 
 ## Fresh Brain bootstrap
 
-This repo includes `brain-template/`, a safe empty Brain vault template. It creates generic Brain structure only; it does not include personal memory.
+This repo includes `brain/template/`, a safe empty Brain vault template. It creates generic Brain structure only; it does not include personal memory.
 
 ```bash
 bun run bootstrap-brain
@@ -131,7 +131,7 @@ The script copies missing files into `${BRAIN_ROOT:-$HOME/brain}` and never over
 Start Qdrant for the RAG index:
 
 ```bash
-docker compose -f brain-rag/docker-compose.yml up -d
+docker compose -f brain/rag/docker-compose.yml up -d
 ```
 
 The default embedding endpoint is LM Studio at `http://localhost:1234/v1/embeddings` with model `text-embedding-bge-m3`.

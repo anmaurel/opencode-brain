@@ -24,5 +24,5 @@ Base de connaissance du projet, alimentée via `/wiki` et `/brain-sync`.
 
 ## Sujets à documenter
 
-- Détail du serveur MCP Brain RAG (`brain-rag/server.mjs`).
+- Détail du serveur MCP Brain RAG (`brain/rag/server.mjs`).
 - Flux complet fresh laptop setup.

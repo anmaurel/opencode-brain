@@ -16,7 +16,6 @@ This template contains generic operating rules and RAG notes only. It must not c
 
 - `AGENTS.md` — generic agent memory rules.
 - `CONTEXT.md` — fresh vault overview.
-- `Daily/` — dated session logs.
 - `Prompts/` — durable prompts/specs.
 - `RAG/` — local RAG setup notes and TODOs.
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const configDir = process.env.OPENCODE_CONFIG_DIR || path.resolve(scriptDir, "..");
-const templateDir = path.join(configDir, "brain-template");
+const templateDir = path.join(configDir, "brain", "template");
 const brainRootInput = (process.env.BRAIN_ROOT || path.join(os.homedir(), "brain")).trim();
 if (!brainRootInput) {
   console.error("BRAIN_ROOT is empty. Unset it or set it to an absolute Brain vault path.");
